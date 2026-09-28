@@ -1,0 +1,663 @@
+{
+  "Uuid": "09d57207-8aba-4dd5-82af-c7712f3433ac",
+  "IsCustomNode": false,
+  "Description": "",
+  "Name": "EC2 Vol concreto",
+  "ElementResolver": {
+    "ResolutionMap": {}
+  },
+  "Inputs": [
+    {
+      "Id": "882e97348f9c401d85ccf51de7f58028",
+      "Name": "String",
+      "Type": "string",
+      "Type2": "string",
+      "Value": "Vol",
+      "Description": "Creates a string."
+    }
+  ],
+  "Outputs": [
+    {
+      "Id": "dd0fb89b11794ba3a0452bb6d61372b8",
+      "Name": "Data.OpenXMLExportExcel",
+      "Type": "boolean",
+      "InitialValue": "True",
+      "Description": "Data.OpenXMLExportExcel (filePath: string, sheetName: string, data: var[][], startRow: int = 0, startColumn: int = 0, overWrite: bool = false, writeAsString: bool = false): bool"
+    }
+  ],
+  "Nodes": [
+    {
+      "ConcreteType": "DSRevitNodesUI.Categories, DSRevitNodesUI",
+      "SelectedIndex": 597,
+      "SelectedString": "OST_StructuralColumns",
+      "Id": "d9cbb53d50514580b2e8edefe18eda97",
+      "NodeType": "ExtensionNode",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "4d7eb65e0b944c88a0c67f0f1c6d66ce",
+          "Name": "Category",
+          "Description": "The selected Category.",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "All built-in categories."
+    },
+    {
+      "ConcreteType": "DSRevitNodesUI.ElementsOfCategory, DSRevitNodesUI",
+      "Id": "47bfc1c62b6d49ce9b61f3eee9f11542",
+      "NodeType": "ExtensionNode",
+      "Inputs": [
+        {
+          "Id": "278bb8f5bc00448ea864a5cf401c48ad",
+          "Name": "Category",
+          "Description": "The Category",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "0852d2023fcf4e1e8e4ac4de364fdcea",
+          "Name": "Elements",
+          "Description": "An element class.",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Get all elements of the specified category from the model."
+    },
+    {
+      "ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels",
+      "Code": "import clr\r\n\r\n# =========================================================\r\n# REFERENCIAS\r\n# =========================================================\r\n\r\nclr.AddReference('RevitServices')\r\nfrom RevitServices.Persistence import DocumentManager\r\n\r\nclr.AddReference('RevitAPI')\r\nfrom Autodesk.Revit.DB import *\r\n\r\n\r\n# =========================================================\r\n# DOCUMENTO ACTUAL\r\n# =========================================================\r\n\r\ndoc = DocumentManager.Instance.CurrentDBDocument\r\n\r\n\r\n# =========================================================\r\n# ENTRADA DE DYNAMO\r\n# =========================================================\r\n\r\nentrada = IN[0]\r\n\r\nif not isinstance(entrada, list):\r\n    entrada = [entrada]\r\n\r\n\r\n# =========================================================\r\n# FUNCIÓN PARA APLANAR LISTAS\r\n# =========================================================\r\n\r\ndef aplanar(lista):\r\n\r\n    resultado = []\r\n\r\n    for elemento in lista:\r\n\r\n        if isinstance(elemento, list):\r\n            resultado.extend(aplanar(elemento))\r\n\r\n        else:\r\n            resultado.append(elemento)\r\n\r\n    return resultado\r\n\r\n\r\nentrada = aplanar(entrada)\r\n\r\n\r\n# =========================================================\r\n# CONVERTIR ELEMENTOS DE DYNAMO A REVIT\r\n# =========================================================\r\n\r\nelementos = []\r\n\r\nfor e in entrada:\r\n\r\n    elemento = UnwrapElement(e)\r\n\r\n    if elemento is not None:\r\n        elementos.append(elemento)\r\n\r\n\r\n# =========================================================\r\n# IDs DE CATEGORÍAS\r\n# =========================================================\r\n\r\nID_COLUMNAS = ElementId(\r\n    BuiltInCategory.OST_StructuralColumns\r\n).Value\r\n\r\nID_VIGAS = ElementId(\r\n    BuiltInCategory.OST_StructuralFraming\r\n).Value\r\n\r\nID_PISOS = ElementId(\r\n    BuiltInCategory.OST_Floors\r\n).Value\r\n\r\n\r\n# =========================================================\r\n# FUNCIÓN PARA OBTENER EL NIVEL\r\n# =========================================================\r\n\r\ndef obtener_nivel(el):\r\n\r\n    if el.Category is None:\r\n        return \"\"\r\n\r\n\r\n    categoria_id = el.Category.Id.Value\r\n\r\n\r\n    # -----------------------------------------------------\r\n    # COLUMNAS\r\n    # -----------------------------------------------------\r\n\r\n    if categoria_id == ID_COLUMNAS:\r\n\r\n        parametro = el.get_Parameter(\r\n            BuiltInParameter.FAMILY_LEVEL_PARAM\r\n        )\r\n\r\n\r\n    # -----------------------------------------------------\r\n    # VIGAS\r\n    # -----------------------------------------------------\r\n\r\n    elif categoria_id == ID_VIGAS:\r\n\r\n        parametro = el.get_Parameter(\r\n            BuiltInParameter.INSTANCE_REFERENCE_LEVEL_PARAM\r\n        )\r\n\r\n\r\n    # -----------------------------------------------------\r\n    # PISOS / LOSAS\r\n    # -----------------------------------------------------\r\n\r\n    elif categoria_id == ID_PISOS:\r\n\r\n        parametro = el.get_Parameter(\r\n            BuiltInParameter.LEVEL_PARAM\r\n        )\r\n\r\n\r\n    else:\r\n\r\n        parametro = None\r\n\r\n\r\n    # -----------------------------------------------------\r\n    # OBTENER NOMBRE DEL NIVEL\r\n    # -----------------------------------------------------\r\n\r\n    if parametro:\r\n\r\n        nivel_id = parametro.AsElementId()\r\n\r\n        if nivel_id != ElementId.InvalidElementId:\r\n\r\n            nivel = doc.GetElement(nivel_id)\r\n\r\n            if nivel:\r\n                return nivel.Name\r\n\r\n\r\n    return \"\"\r\n\r\n\r\n# =========================================================\r\n# FUNCIÓN PARA OBTENER VOLUMEN\r\n# =========================================================\r\n\r\ndef obtener_volumen(el):\r\n\r\n    parametro = el.get_Parameter(\r\n        BuiltInParameter.HOST_VOLUME_COMPUTED\r\n    )\r\n\r\n\r\n    if parametro:\r\n\r\n        volumen_ft3 = parametro.AsDouble()\r\n\r\n\r\n        # Conversión de pies cúbicos a metros cúbicos\r\n\r\n        volumen_m3 = volumen_ft3 * 0.028316846592\r\n\r\n\r\n        return round(volumen_m3, 3)\r\n\r\n\r\n    return 0\r\n\r\n\r\n# =========================================================\r\n# CREAR TABLA\r\n# =========================================================\r\n\r\ntabla = []\r\n\r\n\r\n# =========================================================\r\n# ENCABEZADOS\r\n# =========================================================\r\n\r\ntabla.append([\r\n\r\n    \"Categoría\",\r\n    \"Tipo\",\r\n    \"Nivel\",\r\n    \"Id\",\r\n    \"Volumen (m3)\"\r\n\r\n])\r\n\r\n\r\n# =========================================================\r\n# RECORRER ELEMENTOS\r\n# =========================================================\r\n\r\nfor el in elementos:\r\n\r\n    if el is None:\r\n        continue\r\n\r\n\r\n    # -----------------------------------------------------\r\n    # COMPROBAR CATEGORÍA\r\n    # -----------------------------------------------------\r\n\r\n    if el.Category is None:\r\n        continue\r\n\r\n\r\n    categoria_id = el.Category.Id.Value\r\n\r\n\r\n    # -----------------------------------------------------\r\n    # SOLO COLUMNAS, VIGAS Y PISOS\r\n    # -----------------------------------------------------\r\n\r\n    if categoria_id not in [\r\n\r\n        ID_COLUMNAS,\r\n        ID_VIGAS,\r\n        ID_PISOS\r\n\r\n    ]:\r\n\r\n        continue\r\n\r\n\r\n    # -----------------------------------------------------\r\n    # CATEGORÍA\r\n    # -----------------------------------------------------\r\n\r\n    categoria = el.Category.Name\r\n\r\n\r\n    # -----------------------------------------------------\r\n    # TIPO\r\n    # -----------------------------------------------------\r\n\r\n    tipo = doc.GetElement(\r\n        el.GetTypeId()\r\n    )\r\n\r\n\r\n    nombre_tipo = \"\"\r\n\r\n\r\n    if tipo:\r\n\r\n        parametro_nombre = tipo.get_Parameter(\r\n            BuiltInParameter.SYMBOL_NAME_PARAM\r\n        )\r\n\r\n\r\n        if parametro_nombre:\r\n\r\n            nombre_tipo = parametro_nombre.AsString()\r\n\r\n\r\n        else:\r\n\r\n            nombre_tipo = tipo.Name\r\n\r\n\r\n    # -----------------------------------------------------\r\n    # NIVEL\r\n    # -----------------------------------------------------\r\n\r\n    nivel = obtener_nivel(el)\r\n\r\n\r\n    # -----------------------------------------------------\r\n    # ID\r\n    # -----------------------------------------------------\r\n\r\n    id_elemento = el.Id.Value\r\n\r\n\r\n    # -----------------------------------------------------\r\n    # VOLUMEN\r\n    # -----------------------------------------------------\r\n\r\n    volumen = obtener_volumen(el)\r\n\r\n\r\n    # -----------------------------------------------------\r\n    # AGREGAR FILA\r\n    # -----------------------------------------------------\r\n\r\n    tabla.append([\r\n\r\n        categoria,\r\n\r\n        nombre_tipo,\r\n\r\n        nivel,\r\n\r\n        id_elemento,\r\n\r\n        volumen\r\n\r\n    ])\r\n\r\n\r\n# =========================================================\r\n# SALIDA\r\n# =========================================================\r\n\r\nOUT = tabla",
+      "Engine": "CPython3",
+      "VariableInputPorts": true,
+      "Id": "5c62459045504b79b7a97cc1cb851884",
+      "NodeType": "PythonScriptNode",
+      "Inputs": [
+        {
+          "Id": "b21d27723e5b4a309683ead6667231ad",
+          "Name": "IN[0]",
+          "Description": "Input #0",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "266fe6bf6c664a0895364490659bd847",
+          "Name": "OUT",
+          "Description": "Result of the python script",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Runs an embedded Python script."
+    },
+    {
+      "ConcreteType": "DSRevitNodesUI.Categories, DSRevitNodesUI",
+      "SelectedIndex": 625,
+      "SelectedString": "OST_StructuralFraming",
+      "Id": "1b702065b1a84b53b8767a38ddbce54d",
+      "NodeType": "ExtensionNode",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "d6fb57abd01a4eddad6ada7b8c5d6aa6",
+          "Name": "Category",
+          "Description": "The selected Category.",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "All built-in categories."
+    },
+    {
+      "ConcreteType": "DSRevitNodesUI.ElementsOfCategory, DSRevitNodesUI",
+      "Id": "e2334aa23ff14e918269947d00ce343e",
+      "NodeType": "ExtensionNode",
+      "Inputs": [
+        {
+          "Id": "0212fea2e66249c09eb8884b19b572c8",
+          "Name": "Category",
+          "Description": "The Category",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "b64f755c7aaa4101abb643e2bfea2b3e",
+          "Name": "Elements",
+          "Description": "An element class.",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Get all elements of the specified category from the model."
+    },
+    {
+      "ConcreteType": "Dynamo.Graph.Nodes.ZeroTouch.DSFunction, DynamoCore",
+      "Id": "dd0fb89b11794ba3a0452bb6d61372b8",
+      "NodeType": "FunctionNode",
+      "Inputs": [
+        {
+          "Id": "ef76f6e9600c47afa103c524e5116d94",
+          "Name": "filePath",
+          "Description": "string",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        },
+        {
+          "Id": "20a5f86f17b24c59949c5b3cd638a873",
+          "Name": "sheetName",
+          "Description": "string",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        },
+        {
+          "Id": "a68d68ee210349c8b2cf5d552178f4bf",
+          "Name": "data",
+          "Description": "var[][]",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        },
+        {
+          "Id": "6b52b327ab194515b63ee5769018ce84",
+          "Name": "startRow",
+          "Description": "int\nDefault value : 0",
+          "UsingDefaultValue": true,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        },
+        {
+          "Id": "6920ecf3646d4c8a96577961352900df",
+          "Name": "startColumn",
+          "Description": "int\nDefault value : 0",
+          "UsingDefaultValue": true,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        },
+        {
+          "Id": "2024638d124245a2b0f584237f9a5d9f",
+          "Name": "overWrite",
+          "Description": "bool\nDefault value : false",
+          "UsingDefaultValue": true,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        },
+        {
+          "Id": "703e3269eb864553942deb8cbe3b7237",
+          "Name": "writeAsString",
+          "Description": "bool\nDefault value : false",
+          "UsingDefaultValue": true,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "dcf1eda5c986499bbb50a3553e998b26",
+          "Name": "bool",
+          "Description": "bool",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "FunctionSignature": "DSOffice.Data.OpenXMLExportExcel@string,string,var[][],int,int,bool,bool",
+      "Replication": "Auto",
+      "Description": "Data.OpenXMLExportExcel (filePath: string, sheetName: string, data: var[][], startRow: int = 0, startColumn: int = 0, overWrite: bool = false, writeAsString: bool = false): bool"
+    },
+    {
+      "ConcreteType": "CoreNodeModels.Input.Filename, CoreNodeModels",
+      "Id": "586268052a6644a99e4c8fa7b6275799",
+      "NodeType": "ExtensionNode",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "4667e7151cca42f4b1b9a3a920c6c194",
+          "Name": "",
+          "Description": "File Path",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Allows you to select a file on the system and returns its file path",
+      "HintPath": "D:\\06.-MAESTRIA EN BIM MANAGEMENT\\SEMESTRE 3\\1.-Intelig. Art y Anál de Datos B\\ec2\\Volumen de concreto.xlsx",
+      "InputValue": "..\\ec2\\Volumen de concreto.xlsx"
+    },
+    {
+      "ConcreteType": "CoreNodeModels.Input.StringInput, CoreNodeModels",
+      "SerializedWidth": 0.0,
+      "SerializedHeight": 0.0,
+      "Id": "882e97348f9c401d85ccf51de7f58028",
+      "NodeType": "StringInputNode",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "1939f012f39142eda80099a2e5608693",
+          "Name": "",
+          "Description": "String",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Creates a string.",
+      "InputValue": "Vol"
+    },
+    {
+      "ConcreteType": "CoreNodeModels.Watch, CoreNodeModels",
+      "WatchWidth": 200.0,
+      "WatchHeight": 200.0,
+      "Id": "5d71db9646644c03bc65a65be5636141",
+      "NodeType": "ExtensionNode",
+      "Inputs": [
+        {
+          "Id": "80bbbe905f3142039efdb69adaa65c88",
+          "Name": "",
+          "Description": "Node to show output from",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "2c1100fb9c6c41fb90cdad101cac93f2",
+          "Name": "",
+          "Description": "Node output",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Visualizes a node's output"
+    },
+    {
+      "ConcreteType": "Dynamo.Graph.Nodes.ZeroTouch.DSVarArgFunction, DynamoCore",
+      "FunctionSignature": "DSCore.List.Join@var[]..[]",
+      "FunctionType": "VariableArgument",
+      "Id": "d542d8dff0ab4246bb5ace1492240135",
+      "NodeType": "FunctionNode",
+      "Inputs": [
+        {
+          "Id": "997de04a94ca466b813ab9d035ae6a0a",
+          "Name": "list0",
+          "Description": "Lists to join into one.\n\nvar[]..[]",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        },
+        {
+          "Id": "5103ecbcba824bf1a439092523dc6609",
+          "Name": "list1",
+          "Description": "var[]..[]",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        },
+        {
+          "Id": "a7582f938ad94fed85f53a22979827b5",
+          "Name": "list2",
+          "Description": "var[]..[]",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "6da8775e90bf4530881aab565d8871ef",
+          "Name": "list",
+          "Description": "Joined list.",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Concatenates all given lists into a single list.\n\nList.Join (lists: var[]..[]): var[]..[]"
+    },
+    {
+      "ConcreteType": "DSRevitNodesUI.Categories, DSRevitNodesUI",
+      "SelectedIndex": 245,
+      "SelectedString": "OST_Floors",
+      "Id": "bceefbb8bc784a89b3869b3b7191682e",
+      "NodeType": "ExtensionNode",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "09e2ea9b5ed04b3992229a3dc284d462",
+          "Name": "Category",
+          "Description": "The selected Category.",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "All built-in categories."
+    },
+    {
+      "ConcreteType": "DSRevitNodesUI.ElementsOfCategory, DSRevitNodesUI",
+      "Id": "a31ba2438b73457198cf912c1e71536d",
+      "NodeType": "ExtensionNode",
+      "Inputs": [
+        {
+          "Id": "48a1aa2d99da4c18b52db7fa7b4fbce6",
+          "Name": "Category",
+          "Description": "The Category",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "b733584cfe1b4c61a8dfbab5223c9fe3",
+          "Name": "Elements",
+          "Description": "An element class.",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Get all elements of the specified category from the model."
+    }
+  ],
+  "Connectors": [
+    {
+      "Start": "4d7eb65e0b944c88a0c67f0f1c6d66ce",
+      "End": "278bb8f5bc00448ea864a5cf401c48ad",
+      "Id": "4011c69d32294ab2a36404aa02ab5e27",
+      "IsHidden": "False"
+    },
+    {
+      "Start": "0852d2023fcf4e1e8e4ac4de364fdcea",
+      "End": "997de04a94ca466b813ab9d035ae6a0a",
+      "Id": "ee6f5390d34c4dfd95d50048fcd2b6b1",
+      "IsHidden": "False"
+    },
+    {
+      "Start": "266fe6bf6c664a0895364490659bd847",
+      "End": "80bbbe905f3142039efdb69adaa65c88",
+      "Id": "7768506f9cbe4553b50e0ec2fe61afd1",
+      "IsHidden": "False"
+    },
+    {
+      "Start": "d6fb57abd01a4eddad6ada7b8c5d6aa6",
+      "End": "0212fea2e66249c09eb8884b19b572c8",
+      "Id": "f61296384bfe4fb2afb7cc526a747245",
+      "IsHidden": "False"
+    },
+    {
+      "Start": "b64f755c7aaa4101abb643e2bfea2b3e",
+      "End": "5103ecbcba824bf1a439092523dc6609",
+      "Id": "6b7230d90cb8462e8a4eb6550446dec7",
+      "IsHidden": "False"
+    },
+    {
+      "Start": "4667e7151cca42f4b1b9a3a920c6c194",
+      "End": "ef76f6e9600c47afa103c524e5116d94",
+      "Id": "c3124b751368472489659a12790b4d18",
+      "IsHidden": "False"
+    },
+    {
+      "Start": "1939f012f39142eda80099a2e5608693",
+      "End": "20a5f86f17b24c59949c5b3cd638a873",
+      "Id": "d9dde00eafcb4ed89ca4fbf00a07ce50",
+      "IsHidden": "False"
+    },
+    {
+      "Start": "2c1100fb9c6c41fb90cdad101cac93f2",
+      "End": "a68d68ee210349c8b2cf5d552178f4bf",
+      "Id": "760c1fa2781d4ddeb6020812e3cd0fdc",
+      "IsHidden": "False"
+    },
+    {
+      "Start": "6da8775e90bf4530881aab565d8871ef",
+      "End": "b21d27723e5b4a309683ead6667231ad",
+      "Id": "13cdd3bdba7e426a9b869fd33bc44d00",
+      "IsHidden": "False"
+    },
+    {
+      "Start": "09e2ea9b5ed04b3992229a3dc284d462",
+      "End": "48a1aa2d99da4c18b52db7fa7b4fbce6",
+      "Id": "766a976dd11d46b892521c68ccd17f74",
+      "IsHidden": "False"
+    },
+    {
+      "Start": "b733584cfe1b4c61a8dfbab5223c9fe3",
+      "End": "a7582f938ad94fed85f53a22979827b5",
+      "Id": "cd833c2142dc4b3f8402e167d024ed92",
+      "IsHidden": "False"
+    }
+  ],
+  "Dependencies": [],
+  "NodeLibraryDependencies": [],
+  "EnableLegacyPolyCurveBehavior": true,
+  "Thumbnail": "",
+  "GraphDocumentationURL": null,
+  "ExtensionWorkspaceData": [
+    {
+      "ExtensionGuid": "28992e1d-abb9-417f-8b1b-05e053bee670",
+      "Name": "Properties",
+      "Version": "3.6",
+      "Data": {}
+    },
+    {
+      "ExtensionGuid": "DFBD9CC0-DB40-457A-939E-8C8555555A9D",
+      "Name": "Generative Design",
+      "Version": "9.1",
+      "Data": {}
+    }
+  ],
+  "Author": "",
+  "Linting": {
+    "activeLinter": "None",
+    "activeLinterId": "7b75fb44-43fd-4631-a878-29f4d5d8399a",
+    "warningCount": 0,
+    "errorCount": 0
+  },
+  "Bindings": [],
+  "View": {
+    "Dynamo": {
+      "ScaleFactor": 1.0,
+      "HasRunWithoutCrash": true,
+      "IsVisibleInDynamoLibrary": true,
+      "Version": "3.6.2.11575",
+      "RunType": "Manual",
+      "RunPeriod": "1000"
+    },
+    "Camera": {
+      "Name": "_Background Preview",
+      "EyeX": -17.0,
+      "EyeY": 24.0,
+      "EyeZ": 50.0,
+      "LookX": 12.0,
+      "LookY": -13.0,
+      "LookZ": -58.0,
+      "UpX": 0.0,
+      "UpY": 1.0,
+      "UpZ": 0.0
+    },
+    "ConnectorPins": [],
+    "NodeViews": [
+      {
+        "Id": "d9cbb53d50514580b2e8edefe18eda97",
+        "Name": "Categories",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "ShowGeometry": true,
+        "X": -81.9829891631885,
+        "Y": -47.59559561180819
+      },
+      {
+        "Id": "47bfc1c62b6d49ce9b61f3eee9f11542",
+        "Name": "All Elements of Category",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "ShowGeometry": true,
+        "X": 242.3256631804308,
+        "Y": -67.39189804600053
+      },
+      {
+        "Id": "5c62459045504b79b7a97cc1cb851884",
+        "Name": "Python Script",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "ShowGeometry": true,
+        "X": 764.9279035661448,
+        "Y": 43.108941742376174
+      },
+      {
+        "Id": "1b702065b1a84b53b8767a38ddbce54d",
+        "Name": "Categories",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "ShowGeometry": true,
+        "X": -76.48876931673465,
+        "Y": 88.8060672570333
+      },
+      {
+        "Id": "e2334aa23ff14e918269947d00ce343e",
+        "Name": "All Elements of Category",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "ShowGeometry": true,
+        "X": 252.8031379609116,
+        "Y": 92.20082918773068
+      },
+      {
+        "Id": "dd0fb89b11794ba3a0452bb6d61372b8",
+        "Name": "Data.OpenXMLExportExcel",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": true,
+        "Excluded": false,
+        "ShowGeometry": true,
+        "X": 1322.1702350390738,
+        "Y": -27.552927282695748
+      },
+      {
+        "Id": "586268052a6644a99e4c8fa7b6275799",
+        "Name": "File Path",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "ShowGeometry": true,
+        "X": 603.6941656643742,
+        "Y": -331.00851434489147
+      },
+      {
+        "Id": "882e97348f9c401d85ccf51de7f58028",
+        "Name": "String",
+        "IsSetAsInput": true,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "ShowGeometry": true,
+        "X": 739.4393577938022,
+        "Y": -113.49578820927232
+      },
+      {
+        "Id": "5d71db9646644c03bc65a65be5636141",
+        "Name": "Watch",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "ShowGeometry": true,
+        "X": 942.8814684304939,
+        "Y": 225.1182266204857
+      },
+      {
+        "Id": "d542d8dff0ab4246bb5ace1492240135",
+        "Name": "List.Join",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "ShowGeometry": true,
+        "X": 559.2043215555574,
+        "Y": 19.97829575376221
+      },
+      {
+        "Id": "bceefbb8bc784a89b3869b3b7191682e",
+        "Name": "Categories",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "ShowGeometry": true,
+        "X": -75.17491302459928,
+        "Y": 236.20735045719363
+      },
+      {
+        "Id": "a31ba2438b73457198cf912c1e71536d",
+        "Name": "All Elements of Category",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "ShowGeometry": true,
+        "X": 262.08344869235896,
+        "Y": 242.10347566203546
+      }
+    ],
+    "Annotations": [],
+    "X": 208.44192982226377,
+    "Y": 265.62559161107754,
+    "Zoom": 0.7173224264358097
+  }
+}
